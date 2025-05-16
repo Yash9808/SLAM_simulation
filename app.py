@@ -39,7 +39,7 @@ def render_slam_map():
     return fig
 
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 Robot Movement + 🗺️ SLAM Path (Gradio-Compatible)")
+    gr.Markdown("## 🤖 Robot Movement + 🗺️ SLAM Path")
 
     with gr.Row():
         with gr.Column():
@@ -57,8 +57,5 @@ with gr.Blocks() as demo:
     s.click(lambda: move_robot("S"), outputs=[robot_plot, slam_plot])
     a.click(lambda: move_robot("A"), outputs=[robot_plot, slam_plot])
     d.click(lambda: move_robot("D"), outputs=[robot_plot, slam_plot])
-
-    robot_plot.render(render_robot_view())
-    slam_plot.render(render_slam_map())
 
 demo.launch()
