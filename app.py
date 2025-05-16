@@ -1,9 +1,8 @@
 import gradio as gr
-from pythreejs import *
 import matplotlib.pyplot as plt
 
-pose = {"x": 0, "y": 0, "z": 0}
-trajectory = [(0, 0)]  # Keep track of SLAM path
+pose = {"x": 0, "z": 0}
+trajectory = [(0, 0)]
 
 def move_robot(direction):
     step = 1
@@ -16,56 +15,50 @@ def move_robot(direction):
     elif direction == "D":
         pose["x"] += step
     trajectory.append((pose["x"], pose["z"]))
-    return render_scene(), render_map()
+    return render_robot_view(), render_slam_map()
 
-def render_scene():
-    robot = Mesh(
-        geometry=BoxGeometry(1, 1, 1),
-        material=MeshStandardMaterial(color='red'),
-        position=[pose["x"], pose["y"], pose["z"]]
-    )
-    ambient_light = AmbientLight(color='#ffffff', intensity=0.5)
-    directional_light = DirectionalLight(color='white', position=[5, 5, 5], intensity=0.6)
-    scene = Scene(children=[robot, ambient_light, directional_light])
-    camera = PerspectiveCamera(position=[5, 5, 5])
-    camera.lookAt([0, 0, 0])
-    renderer = Renderer(scene=scene, camera=camera,
-                        controls=[OrbitControls(controlling=camera)],
-                        width=400, height=300)
-    return renderer
+def render_robot_view():
+    fig, ax = plt.subplots()
+    ax.set_title("Robot View (Top Down)")
+    ax.set_xlim(-10, 10)
+    ax.set_ylim(-10, 10)
+    ax.plot(pose["x"], pose["z"], "ro", label="Robot")
+    ax.legend()
+    ax.grid(True)
+    return fig
 
-def render_map():
+def render_slam_map():
+    fig, ax = plt.subplots()
     x_vals = [x for x, z in trajectory]
     z_vals = [z for x, z in trajectory]
-    fig, ax = plt.subplots()
     ax.plot(x_vals, z_vals, marker='o', color='blue')
-    ax.set_title("SLAM Path (Top-Down)")
-    ax.set_xlabel("X Position")
-    ax.set_ylabel("Z Position")
+    ax.set_title("SLAM Map")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Z")
     ax.grid(True)
     return fig
 
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 3D Robot + 🗺️ SLAM Path Visualization")
+    gr.Markdown("## 🤖 Robot Movement + 🗺️ SLAM Path (Gradio-Compatible)")
 
     with gr.Row():
         with gr.Column():
-            scene_display = gr.Component()
+            robot_plot = gr.Plot(label="Robot View")
         with gr.Column():
-            map_display = gr.Plot()
+            slam_plot = gr.Plot(label="SLAM Path")
 
     with gr.Row():
-        w_btn = gr.Button("⬆️ W")
-        s_btn = gr.Button("⬇️ S")
-        a_btn = gr.Button("⬅️ A")
-        d_btn = gr.Button("➡️ D")
+        w = gr.Button("⬆️ W")
+        s = gr.Button("⬇️ S")
+        a = gr.Button("⬅️ A")
+        d = gr.Button("➡️ D")
 
-    w_btn.click(lambda: move_robot("W"), outputs=[scene_display, map_display])
-    s_btn.click(lambda: move_robot("S"), outputs=[scene_display, map_display])
-    a_btn.click(lambda: move_robot("A"), outputs=[scene_display, map_display])
-    d_btn.click(lambda: move_robot("D"), outputs=[scene_display, map_display])
+    w.click(lambda: move_robot("W"), outputs=[robot_plot, slam_plot])
+    s.click(lambda: move_robot("S"), outputs=[robot_plot, slam_plot])
+    a.click(lambda: move_robot("A"), outputs=[robot_plot, slam_plot])
+    d.click(lambda: move_robot("D"), outputs=[robot_plot, slam_plot])
 
-    scene_display.render(render_scene())
-    map_display.render(render_map())
+    robot_plot.render(render_robot_view())
+    slam_plot.render(render_slam_map())
 
 demo.launch()
