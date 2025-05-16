@@ -7,24 +7,35 @@ import random
 
 pose = {"x": 0, "z": 0, "angle": 0}
 trajectory = [(0, 0)]
+obstacle_hits = []
+color_index = 0
+rgb_colors = ['red', 'green', 'blue']
 noise_enabled = True
 
-obstacles = [
-    {"x": 2, "z": 3, "radius": 0.7},
-    {"x": -2, "z": -2, "radius": 1.0},
-    {"x": 0, "z": 5, "radius": 0.8},
-]
+def generate_obstacles(count=10):
+    obs = []
+    for _ in range(count):
+        obs.append({
+            "x": random.uniform(-8, 8),
+            "z": random.uniform(-8, 8),
+            "radius": random.uniform(0.5, 1.2)
+        })
+    return obs
+
+obstacles = generate_obstacles(10)
 
 def toggle_noise(enabled):
     global noise_enabled
     noise_enabled = enabled
     return "Noise: ON" if noise_enabled else "Noise: OFF"
 
-def reset_sim():
-    global pose, trajectory
+def reset_sim(count):
+    global pose, trajectory, obstacles, obstacle_hits
     pose = {"x": 0, "z": 0, "angle": 0}
     trajectory = [(0, 0)]
-    return render_env(), render_slam_map(), "Simulation Reset!"
+    obstacle_hits = []
+    obstacles = generate_obstacles(int(count))
+    return render_env(), render_slam_map(), f"Simulation Reset with {count} obstacles"
 
 def check_collision(x, z):
     for obs in obstacles:
@@ -61,9 +72,11 @@ def move_robot(direction):
         trajectory.append((noisy_x, noisy_z))
     else:
         trajectory.append((pose["x"], pose["z"]))
-    return render_env(), render_slam_map(), f"Moved {direction}"
+
+    return render_env(), render_slam_map(), "Moved " + direction
 
 def render_env():
+    global obstacle_hits
     fig, ax = plt.subplots()
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
@@ -88,33 +101,36 @@ def render_env():
             scan_z = pose["z"] + r * np.sin(ang)
             if check_collision(scan_x, scan_z):
                 ax.plot([pose["x"], scan_x], [pose["z"], scan_z], 'g-', linewidth=0.5)
+                obstacle_hits.append((scan_x, scan_z))
                 break
     plt.close(fig)
     return fig
 
 def render_slam_map():
+    global color_index
     fig, ax = plt.subplots()
     ax.set_title("SLAM Trajectory Map")
     x_vals = [x for x, z in trajectory]
     z_vals = [z for x, z in trajectory]
     ax.plot(x_vals, z_vals, 'bo-', markersize=3)
     ax.grid(True)
+
+    if obstacle_hits:
+        current_color = rgb_colors[color_index % 3]
+        for hit in obstacle_hits[-20:]:
+            ax.plot(hit[0], hit[1], 'o', color=current_color, markersize=6)
+        color_index += 1
+
     plt.close(fig)
     return fig
 
-def on_keypress(text):
-    if not text:
-        return None, None, "Type W/A/S/D and press Enter"
-    key = text.strip().upper()
-    if key in ["W", "A", "S", "D"]:
-        return move_robot(key)
-    else:
-        return render_env(), render_slam_map(), "Invalid key. Use W/A/S/D"
-
+# Gradio Interface
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 SLAM Sim with Keyboard Input (Type W/A/S/D + Enter)")
+    gr.Markdown("## 🤖 SLAM Simulation with Real-Time Obstacle Detection")
 
-    status_text = gr.Textbox(label="Status", interactive=False)
+    obstacle_slider = gr.Slider(1, 20, value=10, step=1, label="Number of Obstacles")
+
+    status_text = gr.Textbox(label="Status")
 
     with gr.Row():
         with gr.Column():
@@ -130,17 +146,11 @@ with gr.Blocks() as demo:
         reset = gr.Button("🔄 Reset")
         toggle = gr.Button("🔀 Toggle Noise")
 
-    input_key = gr.Textbox(label="Type W/A/S/D and press Enter to move", max_lines=1)
-
     w.click(lambda: move_robot("W"), outputs=[env_plot, slam_plot, status_text])
     s.click(lambda: move_robot("S"), outputs=[env_plot, slam_plot, status_text])
     a.click(lambda: move_robot("A"), outputs=[env_plot, slam_plot, status_text])
     d.click(lambda: move_robot("D"), outputs=[env_plot, slam_plot, status_text])
-    reset.click(reset_sim, outputs=[env_plot, slam_plot, status_text])
+    reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, status_text])
     toggle.click(lambda: (None, None, toggle_noise(not noise_enabled)), outputs=[env_plot, slam_plot, status_text])
-
-    input_key.submit(on_keypress, inputs=input_key, outputs=[env_plot, slam_plot, status_text])
-    # Clear the textbox after submission so user can type next key
-    input_key.submit(lambda _: "", inputs=input_key, outputs=input_key)
 
 demo.launch()
