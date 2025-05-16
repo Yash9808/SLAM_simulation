@@ -4,6 +4,7 @@ import matplotlib.patches as patches
 import matplotlib.image as mpimg
 import numpy as np
 import random
+import os
 
 # Global state
 pose = {"x": 0, "z": 0, "angle": 0}
@@ -26,19 +27,23 @@ def generate_obstacles(count=10):
 
 obstacles = generate_obstacles(10)
 
-def toggle_noise(enabled):
+# Toggle sensor noise
+def toggle_noise():
     global noise_enabled
-    noise_enabled = enabled
+    noise_enabled = not noise_enabled
     return "Noise: ON" if noise_enabled else "Noise: OFF"
 
+# Reset simulation
 def reset_sim(count):
-    global pose, trajectory, obstacles, obstacle_hits
+    global pose, trajectory, obstacles, obstacle_hits, color_index
     pose = {"x": 0, "z": 0, "angle": 0}
     trajectory = [(0, 0)]
     obstacle_hits = []
+    color_index = 0
     obstacles = generate_obstacles(int(count))
     return render_env(), render_slam_map(), None, f"Simulation Reset with {count} obstacles"
 
+# Check for collision
 def check_collision(x, z):
     for obs in obstacles:
         dist = np.sqrt((obs["x"] - x)**2 + (obs["z"] - z)**2)
@@ -46,9 +51,12 @@ def check_collision(x, z):
             return True
     return False
 
+# Move robot
 def move_robot(direction):
     global pose, trajectory
     step = 1
+    direction = direction.upper()
+
     if direction == "W":
         new_x, new_z = pose["x"], pose["z"] + step
         pose["angle"] = 90
@@ -75,8 +83,9 @@ def move_robot(direction):
     else:
         trajectory.append((pose["x"], pose["z"]))
 
-    return render_env(), render_slam_map(), None, "✅ Moved " + direction
+    return render_env(), render_slam_map(), None, "Moved " + direction
 
+# Render robot + LiDAR environment
 def render_env():
     global obstacle_hits
     fig, ax = plt.subplots()
@@ -96,6 +105,7 @@ def render_env():
 
     ax.plot(pose["x"], pose["z"], 'ro', markersize=8)
 
+    # Simulate lidar scan lines
     angles = np.linspace(0, 2*np.pi, 24)
     for ang in angles:
         for r in np.linspace(0, 3, 30):
@@ -109,6 +119,7 @@ def render_env():
     plt.close(fig)
     return fig
 
+# Render SLAM trajectory map
 def render_slam_map():
     global color_index
     fig, ax = plt.subplots()
@@ -118,6 +129,7 @@ def render_slam_map():
     ax.plot(x_vals, z_vals, 'bo-', markersize=3)
     ax.grid(True)
 
+    # RGB blinking dots at last few obstacle hits
     if obstacle_hits:
         current_color = rgb_colors[color_index % 3]
         for hit in obstacle_hits[-20:]:
@@ -127,28 +139,25 @@ def render_slam_map():
     plt.close(fig)
     return fig
 
+# Handle typed input
 def handle_text_input(direction):
-    direction = direction.strip().upper()
-    if direction in ["W", "A", "S", "D"]:
-        return move_robot(direction)
-    else:
-        return render_env(), render_slam_map(), None, "❌ Invalid input. Use W / A / S / D."
+    return move_robot(direction.strip().upper())
 
 # Gradio UI
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 SLAM Simulation with Real-Time Obstacle Detection + Collision Alerts")
+    gr.Markdown("## 🤖 SLAM Simulation: Real-Time Navigation & Obstacle Detection")
 
     obstacle_slider = gr.Slider(1, 20, value=10, step=1, label="Number of Obstacles")
+
     direction_input = gr.Textbox(label="Type W / A / S / D and press Enter to move", placeholder="e.g., W")
-    status_text = gr.Textbox(label="Status", interactive=False)
+    status_text = gr.Textbox(label="Status")
+    collision_audio = gr.Audio(label="Collision Sound", interactive=False)
 
     with gr.Row():
         with gr.Column():
             env_plot = gr.Plot(label="Robot + Sensor View")
         with gr.Column():
             slam_plot = gr.Plot(label="SLAM Map")
-
-    collision_audio = gr.Audio(value=None, autoplay=True, visible=False, label="Collision Sound")
 
     with gr.Row():
         w = gr.Button("⬆️ W")
@@ -158,13 +167,14 @@ with gr.Blocks() as demo:
         reset = gr.Button("🔄 Reset")
         toggle = gr.Button("🔀 Toggle Noise")
 
-    w.click(fn=move_robot, inputs=[], outputs=[env_plot, slam_plot, collision_audio, status_text], _js="() => 'W'")
-    a.click(fn=move_robot, inputs=[], outputs=[env_plot, slam_plot, collision_audio, status_text], _js="() => 'A'")
-    s.click(fn=move_robot, inputs=[], outputs=[env_plot, slam_plot, collision_audio, status_text], _js="() => 'S'")
-    d.click(fn=move_robot, inputs=[], outputs=[env_plot, slam_plot, collision_audio, status_text], _js="() => 'D'")
+    # Direction buttons (with direct string inputs)
+    w.click(fn=move_robot, inputs=gr.State("W"), outputs=[env_plot, slam_plot, collision_audio, status_text])
+    a.click(fn=move_robot, inputs=gr.State("A"), outputs=[env_plot, slam_plot, collision_audio, status_text])
+    s.click(fn=move_robot, inputs=gr.State("S"), outputs=[env_plot, slam_plot, collision_audio, status_text])
+    d.click(fn=move_robot, inputs=gr.State("D"), outputs=[env_plot, slam_plot, collision_audio, status_text])
+    reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, collision_audio, status_text])
+    toggle.click(fn=lambda: (None, None, None, toggle_noise()), outputs=[env_plot, slam_plot, collision_audio, status_text])
 
     direction_input.submit(fn=handle_text_input, inputs=direction_input, outputs=[env_plot, slam_plot, collision_audio, status_text])
-    reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, collision_audio, status_text])
-    toggle.click(fn=lambda: (None, None, None, toggle_noise(not noise_enabled)), outputs=[env_plot, slam_plot, collision_audio, status_text])
 
 demo.launch()
