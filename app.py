@@ -1,13 +1,24 @@
 import gradio as gr
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import matplotlib.patches as patches
 import numpy as np
+import random
+import os
+
+# Static map with obstacles
+obstacles = [
+    {"x": 3, "z": 3, "radius": 0.5},
+    {"x": -2, "z": -2, "radius": 1.0},
+    {"x": 0, "z": 5, "radius": 0.75},
+]
 
 pose = {"x": 0, "z": 0, "angle": 0}
 trajectory = [(0, 0)]
 
 def move_robot(direction):
     step = 1
+    noise = 0.1  # small movement noise
     if direction == "W":
         pose["z"] -= step
         pose["angle"] = 90
@@ -20,31 +31,31 @@ def move_robot(direction):
     elif direction == "D":
         pose["x"] += step
         pose["angle"] = 0
-    trajectory.append((pose["x"], pose["z"]))
+
+    # Add slight noise
+    noisy_x = pose["x"] + random.uniform(-noise, noise)
+    noisy_z = pose["z"] + random.uniform(-noise, noise)
+    trajectory.append((noisy_x, noisy_z))
+
     return render_robot_view(), render_slam_map()
 
 def render_robot_view():
     fig, ax = plt.subplots()
-    ax.set_title("Robot View (Top Down)")
+    ax.set_title("Robot + Obstacles")
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
 
-    # Draw the robot as a triangle
-    robot_size = 0.5
-    angle_rad = np.deg2rad(pose["angle"])
-    x, z = pose["x"], pose["z"]
-    triangle = np.array([
-        [0, robot_size],
-        [-robot_size/2, -robot_size/2],
-        [robot_size/2, -robot_size/2]
-    ])
-    rotation_matrix = np.array([
-        [np.cos(angle_rad), -np.sin(angle_rad)],
-        [np.sin(angle_rad), np.cos(angle_rad)]
-    ])
-    rotated_triangle = triangle @ rotation_matrix.T + np.array([x, z])
-    robot_patch = patches.Polygon(rotated_triangle, closed=True, color='red')
-    ax.add_patch(robot_patch)
+    # Draw obstacles
+    for obs in obstacles:
+        circle = plt.Circle((obs["x"], obs["z"]), obs["radius"], color='gray', alpha=0.5)
+        ax.add_patch(circle)
+
+    # Draw robot icon (use a placeholder dot if image fails)
+    try:
+        img = mpimg.imread("robot.png")
+        ax.imshow(img, extent=(pose["x"]-0.5, pose["x"]+0.5, pose["z"]-0.5, pose["z"]+0.5), zorder=10)
+    except:
+        ax.plot(pose["x"], pose["z"], "ro", label="Robot")
 
     ax.grid(True)
     return fig
@@ -54,18 +65,18 @@ def render_slam_map():
     x_vals = [x for x, z in trajectory]
     z_vals = [z for x, z in trajectory]
     ax.plot(x_vals, z_vals, marker='o', color='blue')
-    ax.set_title("SLAM Map")
+    ax.set_title("SLAM Map (Noisy Path)")
     ax.set_xlabel("X")
     ax.set_ylabel("Z")
     ax.grid(True)
     return fig
 
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 Robot Simulation (Triangle) + 🗺️ SLAM Path")
+    gr.Markdown("## 🤖 Robot with Obstacles + Simulated SLAM + Icon")
 
     with gr.Row():
         with gr.Column():
-            robot_plot = gr.Plot(label="Robot View")
+            robot_plot = gr.Plot(label="Environment View")
         with gr.Column():
             slam_plot = gr.Plot(label="SLAM Path")
 
