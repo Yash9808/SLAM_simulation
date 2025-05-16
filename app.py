@@ -38,10 +38,10 @@ def move_robot(direction):
     global pose, trajectory
     step = 1
     if direction == "W":
-        new_x, new_z = pose["x"], pose["z"] - step
+        new_x, new_z = pose["x"], pose["z"] + step  # Move forward (z+)
         pose["angle"] = 90
     elif direction == "S":
-        new_x, new_z = pose["x"], pose["z"] + step
+        new_x, new_z = pose["x"], pose["z"] - step  # Move backward (z-)
         pose["angle"] = -90
     elif direction == "A":
         new_x, new_z = pose["x"] - step, pose["z"]
@@ -62,7 +62,7 @@ def move_robot(direction):
         trajectory.append((noisy_x, noisy_z))
     else:
         trajectory.append((pose["x"], pose["z"]))
-    return render_env(), render_slam_map(), "Moved " + direction
+    return render_env(), render_slam_map(), f"Moved {direction}"
 
 def render_env():
     fig, ax = plt.subplots()
@@ -94,6 +94,7 @@ def render_env():
             if check_collision(scan_x, scan_z):
                 ax.plot([pose["x"], scan_x], [pose["z"], scan_z], 'g-', linewidth=0.5)
                 break
+    plt.close(fig)  # Close to avoid memory leaks
     return fig
 
 def render_slam_map():
@@ -103,10 +104,18 @@ def render_slam_map():
     z_vals = [z for x, z in trajectory]
     ax.plot(x_vals, z_vals, 'bo-', markersize=3)
     ax.grid(True)
+    plt.close(fig)  # Close to avoid memory leaks
     return fig
 
+def on_key(key):
+    key = key.upper()
+    if key in ["W", "A", "S", "D"]:
+        return move_robot(key)
+    else:
+        return render_env(), render_slam_map(), "Press W/A/S/D to move"
+
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 Advanced SLAM Sim: Obstacles, Noise, LiDAR, Real-Time Path")
+    gr.Markdown("## 🤖 Advanced SLAM Sim with Keyboard Control (W/A/S/D)")
 
     status_text = gr.Textbox(label="Status")
 
@@ -124,11 +133,15 @@ with gr.Blocks() as demo:
         reset = gr.Button("🔄 Reset")
         toggle = gr.Button("🔀 Toggle Noise")
 
+    # Button clicks
     w.click(lambda: move_robot("W"), outputs=[env_plot, slam_plot, status_text])
     s.click(lambda: move_robot("S"), outputs=[env_plot, slam_plot, status_text])
     a.click(lambda: move_robot("A"), outputs=[env_plot, slam_plot, status_text])
     d.click(lambda: move_robot("D"), outputs=[env_plot, slam_plot, status_text])
     reset.click(reset_sim, outputs=[env_plot, slam_plot, status_text])
     toggle.click(lambda: (None, None, toggle_noise(not noise_enabled)), outputs=[env_plot, slam_plot, status_text])
+
+    # Keyboard listener
+    demo.keyboard(on_key, outputs=[env_plot, slam_plot, status_text])
 
 demo.launch()
