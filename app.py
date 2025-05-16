@@ -9,7 +9,6 @@ pose = {"x": 0, "z": 0, "angle": 0}
 trajectory = [(0, 0)]
 noise_enabled = True
 
-# Obstacles
 obstacles = [
     {"x": 2, "z": 3, "radius": 0.7},
     {"x": -2, "z": -2, "radius": 1.0},
@@ -38,10 +37,10 @@ def move_robot(direction):
     global pose, trajectory
     step = 1
     if direction == "W":
-        new_x, new_z = pose["x"], pose["z"] + step  # Move forward (z+)
+        new_x, new_z = pose["x"], pose["z"] + step
         pose["angle"] = 90
     elif direction == "S":
-        new_x, new_z = pose["x"], pose["z"] - step  # Move backward (z-)
+        new_x, new_z = pose["x"], pose["z"] - step
         pose["angle"] = -90
     elif direction == "A":
         new_x, new_z = pose["x"] - step, pose["z"]
@@ -70,22 +69,18 @@ def render_env():
     ax.set_ylim(-10, 10)
     ax.set_title("SLAM Environment View")
 
-    # Real map background
     try:
         bg = mpimg.imread("map.png")
         ax.imshow(bg, extent=(-10, 10, -10, 10), alpha=0.2, zorder=0)
     except:
         pass
 
-    # Obstacles
     for obs in obstacles:
         circ = plt.Circle((obs["x"], obs["z"]), obs["radius"], color="gray", alpha=0.6)
         ax.add_patch(circ)
 
-    # Robot
     ax.plot(pose["x"], pose["z"], 'ro', markersize=8)
 
-    # Simulate lidar scan lines
     angles = np.linspace(0, 2*np.pi, 24)
     for ang in angles:
         for r in np.linspace(0, 3, 30):
@@ -94,7 +89,7 @@ def render_env():
             if check_collision(scan_x, scan_z):
                 ax.plot([pose["x"], scan_x], [pose["z"], scan_z], 'g-', linewidth=0.5)
                 break
-    plt.close(fig)  # Close to avoid memory leaks
+    plt.close(fig)
     return fig
 
 def render_slam_map():
@@ -104,20 +99,22 @@ def render_slam_map():
     z_vals = [z for x, z in trajectory]
     ax.plot(x_vals, z_vals, 'bo-', markersize=3)
     ax.grid(True)
-    plt.close(fig)  # Close to avoid memory leaks
+    plt.close(fig)
     return fig
 
-def on_key(key):
-    key = key.upper()
+def on_keypress(text):
+    if not text:
+        return None, None, "Type W/A/S/D and press Enter"
+    key = text.strip().upper()
     if key in ["W", "A", "S", "D"]:
         return move_robot(key)
     else:
-        return render_env(), render_slam_map(), "Press W/A/S/D to move"
+        return render_env(), render_slam_map(), "Invalid key. Use W/A/S/D"
 
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 Advanced SLAM Sim with Keyboard Control (W/A/S/D)")
+    gr.Markdown("## 🤖 SLAM Sim with Keyboard Input (Type W/A/S/D + Enter)")
 
-    status_text = gr.Textbox(label="Status")
+    status_text = gr.Textbox(label="Status", interactive=False)
 
     with gr.Row():
         with gr.Column():
@@ -133,7 +130,8 @@ with gr.Blocks() as demo:
         reset = gr.Button("🔄 Reset")
         toggle = gr.Button("🔀 Toggle Noise")
 
-    # Button clicks
+    input_key = gr.Textbox(label="Type W/A/S/D and press Enter to move", max_lines=1)
+
     w.click(lambda: move_robot("W"), outputs=[env_plot, slam_plot, status_text])
     s.click(lambda: move_robot("S"), outputs=[env_plot, slam_plot, status_text])
     a.click(lambda: move_robot("A"), outputs=[env_plot, slam_plot, status_text])
@@ -141,7 +139,8 @@ with gr.Blocks() as demo:
     reset.click(reset_sim, outputs=[env_plot, slam_plot, status_text])
     toggle.click(lambda: (None, None, toggle_noise(not noise_enabled)), outputs=[env_plot, slam_plot, status_text])
 
-    # Keyboard listener
-    demo.keyboard(on_key, outputs=[env_plot, slam_plot, status_text])
+    input_key.submit(on_keypress, inputs=input_key, outputs=[env_plot, slam_plot, status_text])
+    # Clear the textbox after submission so user can type next key
+    input_key.submit(lambda _: "", inputs=input_key, outputs=input_key)
 
 demo.launch()
