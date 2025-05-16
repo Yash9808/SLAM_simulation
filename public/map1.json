@@ -1,0 +1,39 @@
+{
+    "features": [
+        {
+            "type": "box",
+            "position": [
+                2,
+                0,
+                2
+            ],
+            "size": [
+                1,
+                1,
+                1
+            ]
+        },
+        {
+            "type": "box",
+            "position": [
+                -2,
+                0,
+                -2
+            ],
+            "size": [
+                1,
+                2,
+                1
+            ]
+        },
+        {
+            "type": "obstacle",
+            "position": [
+                0,
+                0,
+                3
+            ],
+            "radius": 0.5
+        }
+    ]
+}
