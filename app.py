@@ -1,6 +1,5 @@
 import gradio as gr
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import matplotlib.image as mpimg
 import numpy as np
 import random
@@ -192,7 +191,7 @@ with gr.Blocks() as demo:
 
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, status_text])
     toggle.click(fn=lambda: (None, None, toggle_noise()), outputs=[env_plot, slam_plot, status_text])
-    auto.click(fn=toggle_auto_mode, inputs=[env_plot, slam_plot, status_text], outputs=auto)
+    auto.click(fn=toggle_auto_mode, inputs=[env_plot, slam_plot, status_text], outputs=status_text)
     direction_input.submit(fn=handle_text_input, inputs=direction_input, outputs=[env_plot, slam_plot, status_text])
 
 demo.launch()
