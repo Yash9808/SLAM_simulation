@@ -70,7 +70,7 @@ def move_robot(direction):
         return render_env(), render_slam_map(), None, "❌ Invalid Key"
 
     if check_collision(new_x, new_z):
-        return render_env(), render_slam_map(), "collision1.wav", "🚫 Collision Detected!"
+        return render_env(), render_slam_map(), "collision1.mp3", "🚫 Collision Detected!"
 
     pose["x"], pose["z"] = new_x, new_z
     if noise_enabled:
