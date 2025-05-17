@@ -2,7 +2,6 @@ import gradio as gr
 import matplotlib.pyplot as plt
 import numpy as np
 import random
-import os
 
 # Robot and environment variables
 pose = [250, 250, 0]
@@ -20,12 +19,6 @@ def generate_obstacles(num_obstacles=5):
         h = random.randint(20, 50)
         obstacles.append((x, y, w, h))
 
-def check_collision(x, y):
-    for (ox, oy, ow, oh) in obstacles:
-        if ox <= x <= ox + ow and oy <= y <= oy + oh:
-            return True
-    return False
-
 def move_robot(direction):
     global pose, trajectory
     dx, dy = 0, 0
@@ -38,27 +31,21 @@ def move_robot(direction):
         dx = -step_size
     elif direction == "D":
         dx = step_size
-
-    new_x = pose[0] + dx
-    new_y = pose[1] + dy
-
-    if check_collision(new_x, new_y):
-        return render_env(), render_slam_map(), "collision1.mp3", "🚫 Collision detected!"
-
-    pose[0] = new_x
-    pose[1] = new_y
-    trajectory.append((pose[0], pose[1]))
-
-    return render_env(), render_slam_map(), None, f"✅ Moved {direction}"
+    pose[0] += dx
+    pose[1] += dy
+    trajectory.append(tuple(pose[:2]))
+    return render_env(), render_slam_map(), None, f"Moved {direction}"
 
 def render_env():
     fig, ax = plt.subplots(figsize=(5, 5))
     ax.set_xlim(0, 500)
     ax.set_ylim(0, 500)
     ax.set_aspect('equal')
+    # Draw robot
     ax.plot(pose[0], pose[1], 'bo', label="Robot")
     if trajectory:
         ax.plot(*zip(*trajectory), 'b--', label="Trajectory")
+    # Draw obstacles
     for (x, y, w, h) in obstacles:
         ax.add_patch(plt.Rectangle((x, y), w, h, color='red'))
     ax.legend()
@@ -76,7 +63,7 @@ def render_slam_map():
     return fig
 
 def toggle_auto(auto_state):
-    return not auto_state, "✅ Auto mode ON" if not auto_state else "❌ Auto mode OFF"
+    return not auto_state, "Auto mode ON" if not auto_state else "Auto mode OFF"
 
 def auto_step(auto_state):
     if auto_state:
@@ -86,10 +73,10 @@ def auto_step(auto_state):
 
 # Build Gradio UI
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 SLAM Robot Demo with Auto Mode")
+    gr.Markdown("## SLAM Robot Demo with Auto Mode")
     env_plot = gr.Plot()
     slam_plot = gr.Plot()
-    collision_audio = gr.Audio(value=None, type="filepath", label="Collision", interactive=False, visible=False)
+    collision_audio = gr.Audio(type="filepath", label="Collision")
     status_text = gr.Textbox(label="Status")
 
     auto_state = gr.State(False)
@@ -101,13 +88,18 @@ with gr.Blocks() as demo:
         gr.Button("➡️").click(fn=move_robot, inputs=gr.Textbox(value="D", visible=False), outputs=[env_plot, slam_plot, collision_audio, status_text])
         auto_button = gr.Button("Toggle Auto Mode")
 
+    # Auto mode toggle updates state
     auto_button.click(fn=toggle_auto, inputs=auto_state, outputs=[auto_state, status_text])
 
-    demo.load(fn=auto_step, inputs=auto_state, outputs=[env_plot, slam_plot, collision_audio, status_text], every=1)
+    # Manual auto-step button (simulates periodic move)
+    auto_step_btn = gr.Button("🔁 Auto Step")
+    auto_step_btn.click(fn=auto_step, inputs=auto_state, outputs=[env_plot, slam_plot, collision_audio, status_text])
 
+    # Initial load state
     demo.load(fn=lambda: (render_env(), render_slam_map(), None, "✅ Ready"),
               outputs=[env_plot, slam_plot, collision_audio, status_text])
 
+    # Initialize obstacles
     generate_obstacles()
 
 demo.launch()
