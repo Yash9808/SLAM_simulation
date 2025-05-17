@@ -4,7 +4,8 @@ import matplotlib.patches as patches
 import matplotlib.image as mpimg
 import numpy as np
 import random
-import os
+import threading
+import time
 
 # Global state
 pose = {"x": 0, "z": 0, "angle": 0}
@@ -13,6 +14,11 @@ obstacle_hits = []
 color_index = 0
 rgb_colors = ['red', 'green', 'blue']
 noise_enabled = True
+
+# Mode state
+mode = "Manual"
+auto_running = False
+auto_thread = None
 
 # Generate random obstacles
 def generate_obstacles(count=10):
@@ -35,7 +41,8 @@ def toggle_noise():
 
 # Reset simulation
 def reset_sim(count):
-    global pose, trajectory, obstacles, obstacle_hits, color_index
+    global pose, trajectory, obstacles, obstacle_hits, color_index, auto_running
+    auto_running = False
     pose = {"x": 0, "z": 0, "angle": 0}
     trajectory = [(0, 0)]
     obstacle_hits = []
@@ -139,13 +146,73 @@ def render_slam_map():
     plt.close(fig)
     return fig
 
-# Handle typed input
+# Text input handler
 def handle_text_input(direction):
     return move_robot(direction.strip().upper())
 
+# Set mode (manual/automatic)
+def set_mode(new_mode):
+    global mode
+    mode = new_mode
+    return f"Mode set to: {mode}"
+
+# Auto move thread logic
+def auto_move_loop(update_outputs):
+    global auto_running
+    directions = ["W", "A", "S", "D"]
+    while auto_running:
+        valid_dirs = directions.copy()
+        random.shuffle(valid_dirs)
+        moved = False
+
+        for dir in valid_dirs:
+            step = 1
+            if dir == "W":
+                new_x, new_z = pose["x"], pose["z"] + step
+            elif dir == "S":
+                new_x, new_z = pose["x"], pose["z"] - step
+            elif dir == "A":
+                new_x, new_z = pose["x"] - step, pose["z"]
+            elif dir == "D":
+                new_x, new_z = pose["x"] + step, pose["z"]
+
+            if not check_collision(new_x, new_z):
+                env, slam, audio, msg = move_robot(dir)
+                update_outputs(env, slam, audio, f"[AUTO] {msg}")
+                moved = True
+                break
+
+        if not moved:
+            update_outputs(render_env(), render_slam_map(), "collision.mp3", "[AUTO] No path available!")
+            auto_running = False
+            break
+
+        time.sleep(1)
+
+# Start auto mode
+def start_auto(env, slam, audio, status):
+    global auto_running, auto_thread
+    if mode != "Automatic":
+        return env, slam, audio, "Switch to 'Automatic' mode to start."
+
+    if auto_running:
+        return env, slam, audio, "Auto mode already running."
+
+    auto_running = True
+
+    def update(env_, slam_, audio_, status_):
+        env.update(env_)
+        slam.update(slam_)
+        audio.update(audio_)
+        status.update(status_)
+
+    auto_thread = threading.Thread(target=auto_move_loop, args=(lambda e, s, a, t: update(e, s, a, t),))
+    auto_thread.start()
+    return env, slam, audio, "Auto movement started."
+
 # Gradio UI
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 SLAM Simulation: Real-Time Navigation & Obstacle Detection")
+    gr.Markdown("## 🤖 SLAM Simulation: Manual & Automatic Robot Navigation")
 
     obstacle_slider = gr.Slider(1, 20, value=10, step=1, label="Number of Obstacles")
 
@@ -167,14 +234,20 @@ with gr.Blocks() as demo:
         reset = gr.Button("🔄 Reset")
         toggle = gr.Button("🔀 Toggle Noise")
 
-    # Direction buttons (with direct string inputs)
+    with gr.Row():
+        mode_selector = gr.Dropdown(choices=["Manual", "Automatic"], value="Manual", label="Select Mode")
+        start_auto_btn = gr.Button("▶️ Start Auto Mode")
+
+    # Button wiring
     w.click(fn=move_robot, inputs=gr.State("W"), outputs=[env_plot, slam_plot, collision_audio, status_text])
     a.click(fn=move_robot, inputs=gr.State("A"), outputs=[env_plot, slam_plot, collision_audio, status_text])
     s.click(fn=move_robot, inputs=gr.State("S"), outputs=[env_plot, slam_plot, collision_audio, status_text])
     d.click(fn=move_robot, inputs=gr.State("D"), outputs=[env_plot, slam_plot, collision_audio, status_text])
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, collision_audio, status_text])
     toggle.click(fn=lambda: (None, None, None, toggle_noise()), outputs=[env_plot, slam_plot, collision_audio, status_text])
-
     direction_input.submit(fn=handle_text_input, inputs=direction_input, outputs=[env_plot, slam_plot, collision_audio, status_text])
+
+    mode_selector.change(fn=set_mode, inputs=mode_selector, outputs=status_text)
+    start_auto_btn.click(fn=start_auto, inputs=[env_plot, slam_plot, collision_audio, status_text], outputs=[env_plot, slam_plot, collision_audio, status_text])
 
 demo.launch()
