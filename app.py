@@ -7,7 +7,6 @@ import random
 import os
 import threading
 import time
-from IPython.display import Audio, display
 
 # Global state
 pose = {"x": 0, "z": 0, "angle": 0}
@@ -75,13 +74,10 @@ def move_robot(direction):
         return render_env(), render_slam_map(), None, "❌ Invalid Key"
 
     if check_collision(new_x, new_z):
-        # Play collision1.mp3 directly if in Jupyter/Colab
+        audio = None
         if os.path.exists("collision1.mp3"):
-            try:
-                display(Audio("collision1.mp3", autoplay=True))
-            except:
-                pass
-        return render_env(), render_slam_map(), None, "🚫 Collision detected!"
+            audio = "collision1.mp3"
+        return render_env(), render_slam_map(), audio, "🚫 Collision detected!"
 
     pose["x"], pose["z"] = new_x, new_z
     if noise_enabled:
@@ -150,26 +146,23 @@ def handle_text_input(direction):
     return move_robot(direction.strip().upper())
 
 # Auto movement thread
-def auto_movement(update_callback):
+def auto_movement(env_plot, slam_plot, audio_box, status_text):
     global auto_mode
     directions = ['W', 'A', 'S', 'D']
     while auto_mode:
         direction = random.choice(directions)
-        env, slam, _, msg = move_robot(direction)
-        update_callback(env, slam, None, f"[AUTO] {msg}")
+        e, s, a, t = move_robot(direction)
+        env_plot.update(value=e)
+        slam_plot.update(value=s)
+        audio_box.update(value=a)
+        status_text.update(value=f"[AUTO] {t}")
         time.sleep(1)
 
-def toggle_auto_mode(env_plot, slam_plot, collision_audio, status_text):
+def toggle_auto_mode(env_plot, slam_plot, audio_box, status_text):
     global auto_mode
     auto_mode = not auto_mode
-
     if auto_mode:
-        def update_ui(e, s, _, t):
-            env_plot.update(value=e)
-            slam_plot.update(value=s)
-            status_text.update(value=t)
-
-        thread = threading.Thread(target=auto_movement, args=(update_ui,))
+        thread = threading.Thread(target=auto_movement, args=(env_plot, slam_plot, audio_box, status_text))
         thread.daemon = True
         thread.start()
         return "🟢 Auto Mode: ON"
@@ -178,12 +171,12 @@ def toggle_auto_mode(env_plot, slam_plot, collision_audio, status_text):
 
 # UI
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 SLAM Simulation with Auto Mode + Collision Sound (No Play Button)")
+    gr.Markdown("## 🤖 SLAM Simulation with Auto Mode + Collision Sound")
 
     obstacle_slider = gr.Slider(1, 20, value=10, step=1, label="Number of Obstacles")
     direction_input = gr.Textbox(label="Type W / A / S / D and press Enter", placeholder="e.g., W")
     status_text = gr.Textbox(label="Status")
-    collision_audio = gr.Audio(label="(Hidden) Collision Sound", interactive=False, visible=False)
+    collision_audio = gr.Audio(label="Collision Sound", interactive=False, visible=True)
 
     with gr.Row():
         with gr.Column():
