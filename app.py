@@ -189,10 +189,15 @@ with gr.Blocks() as demo:
         auto = gr.Button("🤖 Toggle Auto")
 
     # Corrected button input passing
-    w.click(fn=move_robot, inputs=gr.Text(value="W"), outputs=[env_plot, slam_plot, status_text])
-    a.click(fn=move_robot, inputs=gr.Text(value="A"), outputs=[env_plot, slam_plot, status_text])
-    s.click(fn=move_robot, inputs=gr.Text(value="S"), outputs=[env_plot, slam_plot, status_text])
-    d.click(fn=move_robot, inputs=gr.Text(value="D"), outputs=[env_plot, slam_plot, status_text])
+    w.click(fn=lambda: move_robot("W"), outputs=[env_plot, slam_plot, status_text])
+    a.click(fn=lambda: move_robot("A"), outputs=[env_plot, slam_plot, status_text])
+    s.click(fn=lambda: move_robot("S"), outputs=[env_plot, slam_plot, status_text])
+    d.click(fn=lambda: move_robot("D"), outputs=[env_plot, slam_plot, status_text])
+
+    #w.click(fn=move_robot, inputs=gr.Text(value="W"), outputs=[env_plot, slam_plot, status_text])
+    #a.click(fn=move_robot, inputs=gr.Text(value="A"), outputs=[env_plot, slam_plot, status_text])
+    #s.click(fn=move_robot, inputs=gr.Text(value="S"), outputs=[env_plot, slam_plot, status_text])
+    #d.click(fn=move_robot, inputs=gr.Text(value="D"), outputs=[env_plot, slam_plot, status_text])
 
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, status_text])
     toggle.click(fn=lambda: (None, None, toggle_noise()), outputs=[env_plot, slam_plot, status_text])
