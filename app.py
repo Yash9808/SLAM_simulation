@@ -4,19 +4,21 @@ import matplotlib.patches as patches
 import matplotlib.image as mpimg
 import numpy as np
 import random
-import os
 import threading
 import time
 
+# Global simulation state
 pose = {"x": 0, "z": 0, "angle": 0}
 trajectory = [(0, 0)]
 obstacle_hits = []
 color_index = 0
-rgb_colors = ['red', 'green', 'blue']
 noise_enabled = True
 obstacles = []
 auto_mode = False
 auto_direction = 'W'
+
+rgb_colors = ['red', 'green', 'blue']
+
 
 def generate_obstacles(count=10):
     return [{
@@ -25,12 +27,15 @@ def generate_obstacles(count=10):
         "radius": random.uniform(0.5, 1.2)
     } for _ in range(count)]
 
+
 obstacles = generate_obstacles(10)
+
 
 def toggle_noise():
     global noise_enabled
     noise_enabled = not noise_enabled
-    return "Noise: ON" if noise_enabled else "Noise: OFF"
+    return f"Noise: {'ON' if noise_enabled else 'OFF'}"
+
 
 def reset_sim(count):
     global pose, trajectory, obstacles, obstacle_hits, color_index
@@ -41,30 +46,29 @@ def reset_sim(count):
     obstacles = generate_obstacles(int(count))
     return render_env(), render_slam_map(), "", f"Simulation Reset with {count} obstacles"
 
+
 def check_collision(x, z):
     for obs in obstacles:
-        dist = np.sqrt((obs["x"] - x)**2 + (obs["z"] - z)**2)
+        dist = np.hypot(obs["x"] - x, obs["z"] - z)
         if dist <= obs["radius"] + 0.2:
             return True
     return False
 
+
 def move_robot(direction):
     global pose, trajectory
-    step = 1
     direction = direction.upper()
+    step = 1
+    new_x, new_z = pose["x"], pose["z"]
 
-    if direction == "W":
-        new_x, new_z = pose["x"], pose["z"] + step
-        pose["angle"] = 90
-    elif direction == "S":
-        new_x, new_z = pose["x"], pose["z"] - step
-        pose["angle"] = -90
-    elif direction == "A":
-        new_x, new_z = pose["x"] - step, pose["z"]
-        pose["angle"] = 180
-    elif direction == "D":
-        new_x, new_z = pose["x"] + step, pose["z"]
-        pose["angle"] = 0
+    angle_map = {"W": 90, "S": -90, "A": 180, "D": 0}
+    move_map = {"W": (0, step), "S": (0, -step), "A": (-step, 0), "D": (step, 0)}
+
+    if direction in move_map:
+        dx, dz = move_map[direction]
+        new_x += dx
+        new_z += dz
+        pose["angle"] = angle_map[direction]
     else:
         return render_env(), render_slam_map(), "", "❌ Invalid Key"
 
@@ -72,17 +76,14 @@ def move_robot(direction):
         return render_env(), render_slam_map(), "collision1.mp3", "🚫 Collision Detected!"
 
     pose["x"], pose["z"] = new_x, new_z
-    if noise_enabled:
-        noisy_x = pose["x"] + random.uniform(-0.1, 0.1)
-        noisy_z = pose["z"] + random.uniform(-0.1, 0.1)
-        trajectory.append((noisy_x, noisy_z))
-    else:
-        trajectory.append((pose["x"], pose["z"]))
+    noisy_x = pose["x"] + random.uniform(-0.1, 0.1) if noise_enabled else pose["x"]
+    noisy_z = pose["z"] + random.uniform(-0.1, 0.1) if noise_enabled else pose["z"]
+    trajectory.append((noisy_x, noisy_z))
 
     return render_env(), render_slam_map(), "", f"Moved {direction}"
 
+
 def render_env():
-    global obstacle_hits
     fig, ax = plt.subplots()
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
@@ -95,12 +96,11 @@ def render_env():
         pass
 
     for obs in obstacles:
-        circ = plt.Circle((obs["x"], obs["z"]), obs["radius"], color="gray", alpha=0.6)
-        ax.add_patch(circ)
+        ax.add_patch(plt.Circle((obs["x"], obs["z"]), obs["radius"], color="gray", alpha=0.6))
 
     ax.plot(pose["x"], pose["z"], 'ro', markersize=8)
 
-    angles = np.linspace(0, 2*np.pi, 24)
+    angles = np.linspace(0, 2 * np.pi, 24)
     for ang in angles:
         for r in np.linspace(0, 3, 30):
             scan_x = pose["x"] + r * np.cos(ang)
@@ -113,17 +113,18 @@ def render_env():
     plt.close(fig)
     return fig
 
+
 def render_slam_map():
     global color_index
     fig, ax = plt.subplots()
     ax.set_title("SLAM Trajectory Map")
-    x_vals = [x for x, z in trajectory]
-    z_vals = [z for x, z in trajectory]
+    x_vals = [x for x, _ in trajectory]
+    z_vals = [z for _, z in trajectory]
     ax.plot(x_vals, z_vals, 'bo-', markersize=3)
     ax.grid(True)
 
     if obstacle_hits:
-        current_color = rgb_colors[color_index % 3]
+        current_color = rgb_colors[color_index % len(rgb_colors)]
         for hit in obstacle_hits[-20:]:
             ax.plot(hit[0], hit[1], 'o', color=current_color, markersize=6)
         color_index += 1
@@ -131,42 +132,38 @@ def render_slam_map():
     plt.close(fig)
     return fig
 
+
 def handle_text_input(direction):
     return move_robot(direction.strip().upper())
 
-def auto_movement(env_plot, slam_plot, audio_trigger, status_text):
-    global auto_mode, auto_direction
+
+# Auto Mode Handler
+def auto_movement(status_text, env_plot, slam_plot, audio_component):
+    global auto_mode
     while auto_mode:
         env, slam, sound, msg = move_robot(auto_direction)
+        status_text.update(value=f"[AUTO] {msg}")
         env_plot.update(value=env)
         slam_plot.update(value=slam)
-        status_text.update(value=f"[AUTO] {msg}")
         if sound:
-            audio_trigger.play(sound)
+            audio_component.update(value=sound)
         time.sleep(1)
 
-def toggle_auto_mode(env_plot, slam_plot, audio_trigger, status_text):
+
+def toggle_auto_mode(status_text, env_plot, slam_plot, audio_component):
     global auto_mode
     auto_mode = not auto_mode
     if auto_mode:
-        thread = threading.Thread(target=auto_movement, args=(env_plot, slam_plot, audio_trigger, status_text))
+        thread = threading.Thread(
+            target=auto_movement, args=(status_text, env_plot, slam_plot, audio_component))
         thread.daemon = True
         thread.start()
         return "🟢 Auto Mode: ON"
     else:
         return "⚪ Auto Mode: OFF"
 
-# Audio Trigger Class
-class AudioTrigger:
-    def __init__(self):
-        self.play_event = None
-    def play(self, filepath):
-        if self.play_event:
-            self.play_event(filepath)
 
-trigger_audio = AudioTrigger()
-
-# UI
+# Gradio UI
 with gr.Blocks() as demo:
     gr.Markdown("## 🤖 SLAM Simulation (Auto Mode + Collision Sound)")
 
@@ -175,13 +172,10 @@ with gr.Blocks() as demo:
     status_text = gr.Textbox(label="Status", interactive=False)
 
     with gr.Row():
-        with gr.Column():
-            env_plot = gr.Plot(label="Robot View")
-        with gr.Column():
-            slam_plot = gr.Plot(label="SLAM Map")
+        env_plot = gr.Plot(label="Robot View")
+        slam_plot = gr.Plot(label="SLAM Map")
 
-    audio_component = gr.Audio(label="", visible=False, interactive=False)
-    trigger_audio.play_event = lambda path: audio_component.update(value=path)
+    audio_component = gr.Audio(label="", visible=False)
 
     with gr.Row():
         w = gr.Button("⬆️ W")
@@ -192,7 +186,6 @@ with gr.Blocks() as demo:
         toggle = gr.Button("🔀 Toggle Noise")
         auto = gr.Button("🤖 Toggle Auto")
 
-    # Updated movement buttons (NO gr.State)
     w.click(fn=lambda: move_robot("W"), outputs=[env_plot, slam_plot, audio_component, status_text])
     a.click(fn=lambda: move_robot("A"), outputs=[env_plot, slam_plot, audio_component, status_text])
     s.click(fn=lambda: move_robot("S"), outputs=[env_plot, slam_plot, audio_component, status_text])
@@ -200,7 +193,9 @@ with gr.Blocks() as demo:
 
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, audio_component, status_text])
     toggle.click(fn=lambda: (None, None, "", toggle_noise()), outputs=[env_plot, slam_plot, audio_component, status_text])
-    auto.click(fn=toggle_auto_mode, inputs=[env_plot, slam_plot, trigger_audio, status_text], outputs=auto)
-    direction_input.submit(fn=handle_text_input, inputs=direction_input, outputs=[env_plot, slam_plot, audio_component, status_text])
+    auto.click(fn=toggle_auto_mode, inputs=[status_text, env_plot, slam_plot, audio_component], outputs=auto)
+
+    direction_input.submit(fn=handle_text_input, inputs=direction_input,
+                           outputs=[env_plot, slam_plot, audio_component, status_text])
 
 demo.launch()
