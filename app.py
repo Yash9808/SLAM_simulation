@@ -4,7 +4,6 @@ import matplotlib.patches as patches
 import matplotlib.image as mpimg
 import numpy as np
 import random
-import os
 import threading
 import time
 
@@ -18,7 +17,6 @@ noise_enabled = True
 obstacles = []
 auto_mode = False
 
-# Generate obstacles
 def generate_obstacles(count=10):
     return [{
         "x": random.uniform(-8, 8),
@@ -37,9 +35,9 @@ def reset_sim(count):
     global pose, trajectory, obstacles, obstacle_hits, color_index
     pose = {"x": 0, "z": 0, "angle": 0}
     trajectory = [(0, 0)]
-    obstacle_hits = []
+    obstacle_hits.clear()
     color_index = 0
-    obstacles = generate_obstacles(int(count))
+    obstacles[:] = generate_obstacles(int(count))
     return render_env(), render_slam_map(), f"Simulation Reset with {count} obstacles"
 
 def check_collision(x, z):
@@ -70,11 +68,10 @@ def move_robot(direction):
         return render_env(), render_slam_map(), "❌ Invalid Key"
 
     if check_collision(new_x, new_z):
-        # Gradio does not support IPython Audio playback in the browser.
-        # Instead, we can display a status message or play a sound via HTML audio.
         return render_env(), render_slam_map(), "🚫 Collision detected!"
 
     pose["x"], pose["z"] = new_x, new_z
+
     if noise_enabled:
         noisy_x = pose["x"] + random.uniform(-0.1, 0.1)
         noisy_z = pose["z"] + random.uniform(-0.1, 0.1)
@@ -82,7 +79,7 @@ def move_robot(direction):
     else:
         trajectory.append((pose["x"], pose["z"]))
 
-    return render_env(), render_slam_map(), "Moved " + direction
+    return render_env(), render_slam_map(), f"Moved {direction}"
 
 def render_env():
     global obstacle_hits
@@ -94,7 +91,7 @@ def render_env():
     try:
         bg = mpimg.imread("map.png")
         ax.imshow(bg, extent=(-10, 10, -10, 10), alpha=0.2)
-    except:
+    except FileNotFoundError:
         pass
 
     for obs in obstacles:
@@ -171,7 +168,7 @@ with gr.Blocks() as demo:
 
     obstacle_slider = gr.Slider(1, 20, value=10, step=1, label="Number of Obstacles")
     direction_input = gr.Textbox(label="Type W / A / S / D and press Enter", placeholder="e.g., W")
-    status_text = gr.Textbox(label="Status")
+    status_text = gr.Textbox(label="Status", interactive=False)
 
     with gr.Row():
         with gr.Column():
@@ -188,16 +185,10 @@ with gr.Blocks() as demo:
         toggle = gr.Button("🔀 Toggle Noise")
         auto = gr.Button("🤖 Toggle Auto")
 
-    # Corrected button input passing
     w.click(fn=lambda: move_robot("W"), outputs=[env_plot, slam_plot, status_text])
     a.click(fn=lambda: move_robot("A"), outputs=[env_plot, slam_plot, status_text])
     s.click(fn=lambda: move_robot("S"), outputs=[env_plot, slam_plot, status_text])
     d.click(fn=lambda: move_robot("D"), outputs=[env_plot, slam_plot, status_text])
-
-    #w.click(fn=move_robot, inputs=gr.Text(value="W"), outputs=[env_plot, slam_plot, status_text])
-    #a.click(fn=move_robot, inputs=gr.Text(value="A"), outputs=[env_plot, slam_plot, status_text])
-    #s.click(fn=move_robot, inputs=gr.Text(value="S"), outputs=[env_plot, slam_plot, status_text])
-    #d.click(fn=move_robot, inputs=gr.Text(value="D"), outputs=[env_plot, slam_plot, status_text])
 
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, status_text])
     toggle.click(fn=lambda: (None, None, toggle_noise()), outputs=[env_plot, slam_plot, status_text])
