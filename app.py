@@ -71,7 +71,7 @@ def move_robot(direction):
         return render_env(), render_slam_map(), "❌ Invalid Key"
 
     if check_collision(new_x, new_z):
-        audio_path = "collision1.mp3"
+        audio_path = "collision.mp3"
         if os.path.exists(audio_path):
             display(Audio(audio_path, autoplay=True))  # 🎵 Direct audio playback
         return render_env(), render_slam_map(), "🚫 Collision detected!"
