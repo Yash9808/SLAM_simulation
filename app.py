@@ -7,7 +7,6 @@ import random
 import os
 import threading
 import time
-from IPython.display import Audio, display
 
 # Global state
 pose = {"x": 0, "z": 0, "angle": 0}
@@ -71,9 +70,8 @@ def move_robot(direction):
         return render_env(), render_slam_map(), "❌ Invalid Key"
 
     if check_collision(new_x, new_z):
-        audio_path = "collision.mp3"
-        if os.path.exists(audio_path):
-            display(Audio(audio_path, autoplay=True))  # 🎵 Direct audio playback
+        # Gradio does not support IPython Audio playback in the browser.
+        # Instead, we can display a status message or play a sound via HTML audio.
         return render_env(), render_slam_map(), "🚫 Collision detected!"
 
     pose["x"], pose["z"] = new_x, new_z
@@ -88,7 +86,7 @@ def move_robot(direction):
 
 def render_env():
     global obstacle_hits
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5,5))
     ax.set_xlim(-10, 10)
     ax.set_ylim(-10, 10)
     ax.set_title("SLAM Environment View")
@@ -105,6 +103,9 @@ def render_env():
 
     ax.plot(pose["x"], pose["z"], 'ro', markersize=8)
 
+    # Clear previous hits to avoid infinite growth
+    obstacle_hits.clear()
+
     angles = np.linspace(0, 2*np.pi, 24)
     for ang in angles:
         for r in np.linspace(0, 3, 30):
@@ -120,7 +121,7 @@ def render_env():
 
 def render_slam_map():
     global color_index
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5,5))
     ax.set_title("SLAM Trajectory Map")
     x_vals = [x for x, z in trajectory]
     z_vals = [z for x, z in trajectory]
@@ -128,7 +129,7 @@ def render_slam_map():
     ax.grid(True)
 
     if obstacle_hits:
-        current_color = rgb_colors[color_index % 3]
+        current_color = rgb_colors[color_index % len(rgb_colors)]
         for hit in obstacle_hits[-20:]:
             ax.plot(hit[0], hit[1], 'o', color=current_color, markersize=6)
         color_index += 1
@@ -158,8 +159,7 @@ def toggle_auto_mode(env_plot, slam_plot, status_text):
             slam_plot.update(value=s)
             status_text.update(value=t)
 
-        thread = threading.Thread(target=auto_movement, args=(update_ui,))
-        thread.daemon = True
+        thread = threading.Thread(target=auto_movement, args=(update_ui,), daemon=True)
         thread.start()
         return "🟢 Auto Mode: ON"
     else:
@@ -167,7 +167,7 @@ def toggle_auto_mode(env_plot, slam_plot, status_text):
 
 # Gradio UI
 with gr.Blocks() as demo:
-    gr.Markdown("## 🤖 SLAM Simulation with Auto Mode + Collision Sound (No Play Button)")
+    gr.Markdown("## 🤖 SLAM Simulation with Auto Mode + Collision Status")
 
     obstacle_slider = gr.Slider(1, 20, value=10, step=1, label="Number of Obstacles")
     direction_input = gr.Textbox(label="Type W / A / S / D and press Enter", placeholder="e.g., W")
@@ -188,10 +188,12 @@ with gr.Blocks() as demo:
         toggle = gr.Button("🔀 Toggle Noise")
         auto = gr.Button("🤖 Toggle Auto")
 
-    w.click(fn=move_robot, inputs=gr.State("W"), outputs=[env_plot, slam_plot, status_text])
-    a.click(fn=move_robot, inputs=gr.State("A"), outputs=[env_plot, slam_plot, status_text])
-    s.click(fn=move_robot, inputs=gr.State("S"), outputs=[env_plot, slam_plot, status_text])
-    d.click(fn=move_robot, inputs=gr.State("D"), outputs=[env_plot, slam_plot, status_text])
+    # Corrected button input passing
+    w.click(fn=move_robot, inputs=gr.Text(value="W"), outputs=[env_plot, slam_plot, status_text])
+    a.click(fn=move_robot, inputs=gr.Text(value="A"), outputs=[env_plot, slam_plot, status_text])
+    s.click(fn=move_robot, inputs=gr.Text(value="S"), outputs=[env_plot, slam_plot, status_text])
+    d.click(fn=move_robot, inputs=gr.Text(value="D"), outputs=[env_plot, slam_plot, status_text])
+
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, status_text])
     toggle.click(fn=lambda: (None, None, toggle_noise()), outputs=[env_plot, slam_plot, status_text])
     auto.click(fn=toggle_auto_mode, inputs=[env_plot, slam_plot, status_text], outputs=auto)
