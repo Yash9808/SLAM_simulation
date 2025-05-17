@@ -192,10 +192,12 @@ with gr.Blocks() as demo:
         toggle = gr.Button("🔀 Toggle Noise")
         auto = gr.Button("🤖 Toggle Auto")
 
-    w.click(fn=move_robot, inputs=gr.State("W"), outputs=[env_plot, slam_plot, audio_component, status_text])
-    a.click(fn=move_robot, inputs=gr.State("A"), outputs=[env_plot, slam_plot, audio_component, status_text])
-    s.click(fn=move_robot, inputs=gr.State("S"), outputs=[env_plot, slam_plot, audio_component, status_text])
-    d.click(fn=move_robot, inputs=gr.State("D"), outputs=[env_plot, slam_plot, audio_component, status_text])
+    # Updated movement buttons (NO gr.State)
+    w.click(fn=lambda: move_robot("W"), outputs=[env_plot, slam_plot, audio_component, status_text])
+    a.click(fn=lambda: move_robot("A"), outputs=[env_plot, slam_plot, audio_component, status_text])
+    s.click(fn=lambda: move_robot("S"), outputs=[env_plot, slam_plot, audio_component, status_text])
+    d.click(fn=lambda: move_robot("D"), outputs=[env_plot, slam_plot, audio_component, status_text])
+
     reset.click(fn=reset_sim, inputs=[obstacle_slider], outputs=[env_plot, slam_plot, audio_component, status_text])
     toggle.click(fn=lambda: (None, None, "", toggle_noise()), outputs=[env_plot, slam_plot, audio_component, status_text])
     auto.click(fn=toggle_auto_mode, inputs=[env_plot, slam_plot, trigger_audio, status_text], outputs=auto)
