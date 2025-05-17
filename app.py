@@ -54,7 +54,6 @@ def check_collision(x, z):
             return True
     return False
 
-# Movement logic
 def move_robot(direction):
     global pose, trajectory
     step = 1
@@ -76,13 +75,8 @@ def move_robot(direction):
         return render_env(), render_slam_map(), None, "❌ Invalid Key"
 
     if check_collision(new_x, new_z):
-        # Play collision1.mp3 directly if in Jupyter/Colab
-        if os.path.exists("collision1.mp3"):
-            try:
-                display(Audio("collision1.mp3", autoplay=True))
-            except:
-                pass
-        return render_env(), render_slam_map(), None, "🚫 Collision detected!"
+        audio_path = "collision1.mp3" if os.path.exists("collision1.mp3") else None
+        return render_env(), render_slam_map(), audio_path, "🚫 Collision detected!"
 
     pose["x"], pose["z"] = new_x, new_z
     if noise_enabled:
@@ -93,6 +87,7 @@ def move_robot(direction):
         trajectory.append((pose["x"], pose["z"]))
 
     return render_env(), render_slam_map(), None, "Moved " + direction
+
 
 # Environment view
 def render_env():
